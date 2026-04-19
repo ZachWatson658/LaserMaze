@@ -1,0 +1,662 @@
+<!-- LASER MAZE PROTOTYPE - VERSION 2.3 (RESPONSIVE) -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Laser Maze</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --sidebar-bg: #0a0a0a;
+            --grid-line: #333;
+            --mini-grid-line: #555;
+            --cell-size: 75px;
+            --mini-cell-size: 50px;
+            --laser-beam-color: #ff3333;
+            --text-color: #eee;
+            --mirror-color: #55ccff;
+            --splitter-color: #33ff33;
+            --laser-piece-color: #ff3333;
+            --checkpoint-color: #ffcc00;
+            --target-color: #bf40bf;
+            --wedge-color: #ff8c00;
+            --blocker-color: #777;
+            --beginner-color: #1a8a63;
+            --intermediate-color: #3460a8;
+            --advanced-color: #b37400;
+            --expert-color: #a83232;
+            --box-width: calc(var(--mini-cell-size) * 5 + 34px);
+            --glow: 0 0 20px 6px rgba(180,180,180,0.12);
+        }
+
+        *, *::before, *::after { box-sizing: border-box; }
+        body { background-color: var(--bg-color); color: var(--text-color); font-family: 'Segoe UI', Tahoma, sans-serif; display: flex; height: 100vh; margin: 0; overflow: hidden; user-select: none; }
+
+        /* ── SIDEBAR ── */
+        #sidebar {
+            width: 320px; min-width: 320px; background-color: var(--sidebar-bg);
+            border-right: 1px solid var(--grid-line); padding: 20px;
+            overflow-y: auto; display: flex; flex-direction: column; gap: 20px;
+            transition: transform 0.3s ease;
+            z-index: 100;
+        }
+        .level-section { border: 2px solid #333; border-radius: 16px; padding: 15px; background: rgba(0,0,0,0.3); box-shadow: var(--glow); }
+        .section-title { font-size: 0.9rem; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 12px; font-weight: bold; text-align: center; }
+        .level-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+        .level-btn { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: bold; cursor: pointer; transition: 0.2s; border: none; color: #000; }
+        .level-btn:hover { filter: brightness(1.2); transform: scale(1.1); }
+        .level-btn.active { outline: 2px solid white; outline-offset: 2px; }
+        .level-btn.completed { outline: 2px solid #55ff55; outline-offset: 2px; box-shadow: 0 0 6px rgba(85,255,85,0.5); }
+        .level-btn.active.completed { outline: 2px solid #55ff55; }
+        #sidebar::-webkit-scrollbar { width: 6px; }
+        #sidebar::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+
+        /* ── HAMBURGER ── */
+        #hamburger {
+            display: none; position: fixed; top: 12px; left: 12px; z-index: 200;
+            background: #1a1a1a; border: 1px solid #444; border-radius: 8px;
+            width: 40px; height: 40px; flex-direction: column; align-items: center;
+            justify-content: center; gap: 5px; cursor: pointer; box-shadow: var(--glow);
+        }
+        #hamburger span { display: block; width: 22px; height: 2px; background: #eee; border-radius: 2px; transition: 0.3s; }
+        #overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 99; }
+
+        /* ── MAIN ── */
+        #main-content { flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px 20px; overflow: hidden; }
+        h1 { margin: 0 0 15px 0; font-size: 3.5rem; font-weight: 900; letter-spacing: 8px; text-transform: uppercase; color: #fff; text-shadow: 0 0 10px #ff3333, 0 0 20px #ff3333; white-space: nowrap; }
+        .game-area { display: flex; align-items: flex-start; gap: 30px; }
+
+        /* ── UI BOXES ── */
+        .ui-box { background: #1a1a1a; border: 2px solid #444; border-radius: 12px; padding: 12px 15px; display: flex; flex-direction: column; align-items: center; box-shadow: 0 0 20px rgba(0,0,0,0.5), var(--glow); height: calc(var(--cell-size) * 5 + 12px); width: var(--box-width); }
+        .box-title { font-size: 1.5rem; font-weight: bold; margin-bottom: 10px; letter-spacing: 3px; text-transform: uppercase; color: #aaa; text-decoration: underline; }
+        .target-info-row { display: flex; align-items: center; justify-content: center; width: 100%; gap: 10px; margin-top: auto; margin-bottom: 8px; }
+        .target-circle { width: 30px; height: 30px; background: #ff3333; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: bold; font-size: 1.1rem; border: 2px solid #fff; }
+        #inventory-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; width: 100%; overflow-y: auto; }
+        .inv-item-wrap { width: var(--cell-size); height: var(--cell-size); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+
+        /* ── PLAY GRID ── */
+        #game-container { position: relative; border: 6px solid var(--grid-line); border-radius: 4px; background-image: linear-gradient(var(--grid-line) 1px, transparent 1px), linear-gradient(90deg, var(--grid-line) 1px, transparent 1px); background-size: var(--cell-size) var(--cell-size); background-position: -1px -1px; transition: border-color 0.4s, box-shadow 0.4s; box-shadow: var(--glow); flex-shrink: 0; }
+        #game-container.win-border { border-color: #55ff55 !important; box-shadow: 0 0 30px rgba(85,255,85,0.4); }
+        #grid { display: grid; grid-template-columns: repeat(5, var(--cell-size)); grid-template-rows: repeat(5, var(--cell-size)); }
+        .cell { width: var(--cell-size); height: var(--cell-size); display: flex; align-items: center; justify-content: center; position: relative; z-index: 2; }
+        .cell.drag-over { background: rgba(255,255,255,0.1); }
+        #mini-grid { margin-top: auto; display: grid; grid-template-columns: repeat(5, var(--mini-cell-size)); grid-template-rows: repeat(5, var(--mini-cell-size)); background-image: linear-gradient(var(--mini-grid-line) 1px, transparent 1px), linear-gradient(90deg, var(--mini-grid-line) 1px, transparent 1px); background-size: var(--mini-cell-size) var(--mini-cell-size); border: 1px solid var(--mini-grid-line); }
+        .mini-cell { width: var(--mini-cell-size); height: var(--mini-cell-size); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+
+        /* ── PIECE VISUALS ── */
+        .piece-container { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; cursor: grab; position: relative; }
+        .laser-svg-icon { width: 85%; height: 85%; color: var(--laser-piece-color); filter: drop-shadow(0 0 8px var(--laser-piece-color)); }
+        .bar { width: 12px; height: 75%; border-radius: 10px; background: currentColor; box-shadow: 0 0 15px currentColor; }
+        .mystery-box { width: 75%; height: 75%; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 900; color: #000; font-size: 1.5rem; border: 2px solid rgba(255,255,255,0.4); box-shadow: 0 0 10px rgba(0,0,0,0.5); }
+        .target-tri, .wedge-tri { width: 55%; height: 55%; transition: transform 0.2s; }
+        .target-tri { color: var(--target-color); }
+        .wedge-tri { color: var(--wedge-color); }
+        .target-tri svg, .wedge-tri svg { width: 100%; height: 100%; overflow: visible; }
+        .hit-anim { animation: pulse 0.6s infinite alternate ease-in-out !important; }
+        @keyframes pulse { from { opacity: 1; transform: scale(1); } to { opacity: 0.8; transform: scale(1.1); filter: brightness(1.6) drop-shadow(0 0 20px var(--target-color)); } }
+
+        /* ── LASER SVG ── */
+        #laser-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+        .laser-segment { fill: none; stroke: var(--laser-beam-color); stroke-width: 5px; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 5px var(--laser-beam-color)); }
+
+        /* ── BUTTONS ── */
+        .reset-btn { padding: 10px 20px; background: #222; border: 1px solid #444; color: #888; border-radius: 6px; cursor: pointer; text-transform: uppercase; letter-spacing: 1px; margin-top: 15px; font-weight: bold; transition: 0.2s; box-shadow: var(--glow); }
+        .reset-btn:hover { background: #333; color: #fff; border-color: #666; }
+        #next-btn.next-glow { box-shadow: 0 0 20px #55ff55; border-color: #55ff55 !important; color: #fff !important; transform: scale(1.05); }
+
+        /* ── STATUS & LEGEND ── */
+        #status { margin: 5px 0; font-size: 2.2rem; height: 50px; color: #55ff55; font-weight: 900; text-align: center; display: flex; align-items: center; justify-content: center; letter-spacing: 3px; text-shadow: 0 0 10px #00ff00; }
+        .legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px 40px; background: rgba(255,255,255,0.04); padding: 15px 40px; border-radius: 50px; border: 1px solid #333; box-shadow: var(--glow); }
+        .legend-item { display: flex; align-items: center; gap: 10px; font-size: 1.1rem; color: #bbb; text-transform: uppercase; }
+        .key-icon { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .key-icon .bar { height: 100%; width: 9px; box-shadow: 0 0 12px currentColor; }
+        .slash-icon { transform: rotate(45deg); }
+        .vert-icon { transform: rotate(0deg); }
+        #crocs-tag { font-size: 1rem; color: #555; text-align: center; margin-top: 6px; letter-spacing: 1px; }
+
+        /* ════════════════════════════════
+           RESPONSIVE — MOBILE (landscape)
+           ════════════════════════════════ */
+        @media (max-width: 900px) {
+            /* Sidebar becomes a fixed drawer — same as before */
+            #sidebar {
+                position: fixed; top: 0; left: 0; height: 100vh;
+                transform: translateX(-100%);
+                box-shadow: 4px 0 20px rgba(0,0,0,0.6);
+            }
+            #sidebar.open { transform: translateX(0); }
+            #hamburger { display: flex; }
+            #overlay.open { display: block; }
+
+            /* Main: same horizontal layout as desktop, tighter padding */
+            #main-content { padding: 8px 8px 4px; }
+
+            /* Title smaller to save vertical space */
+            h1 { font-size: clamp(1.2rem, 5vw, 2rem); letter-spacing: clamp(2px, 1.5vw, 6px); margin-bottom: 8px; }
+
+            /* Game area stays as a row — pieces | grid | card */
+            .game-area { gap: 10px; }
+
+            /* ui-box matches grid height dynamically (set by JS) */
+            .ui-box { height: calc(var(--cell-size) * 5 + 12px); }
+
+            /* Status smaller */
+            #status { font-size: 1.2rem; height: 32px; margin: 2px 0; }
+
+            /* Legend wraps tighter */
+            .legend { padding: 8px 16px; border-radius: 16px; gap: 6px 16px; }
+            .legend-item { font-size: 0.7rem; gap: 5px; }
+            .key-icon { width: 22px; height: 22px; }
+            .key-icon .bar { width: 6px; }
+            #crocs-tag { font-size: 0.7rem; margin-top: 3px; }
+
+            /* Buttons smaller */
+            .reset-btn { padding: 6px 12px; font-size: 0.75rem; margin-top: 8px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Hamburger (mobile only) -->
+    <button id="hamburger" onclick="toggleSidebar()" aria-label="Open level menu">
+        <span></span><span></span><span></span>
+    </button>
+    <div id="overlay" onclick="toggleSidebar()"></div>
+
+    <aside id="sidebar"></aside>
+
+    <main id="main-content">
+        <h1>Laser Maze</h1>
+        <div class="game-area">
+
+            <!-- DESKTOP: pieces left, grid center, card right -->
+            <!-- MOBILE:  grid top, pieces+card bottom row -->
+
+            <div class="pieces-column" id="pieces-col">
+                <div class="ui-box" id="pieces-box">
+                    <div class="box-title">Pieces</div>
+                    <div id="inventory-grid"></div>
+                </div>
+                <button class="reset-btn" onclick="resetBoard()">Reset</button>
+            </div>
+
+            <div id="game-container">
+                <div id="grid"></div>
+                <svg id="laser-svg"></svg>
+            </div>
+
+            <div class="level-column" id="level-col">
+                <div class="ui-box" id="level-card">
+                    <div class="box-title" id="card-header">Level 1</div>
+                    <div class="target-info-row">
+                        <div style="font-size:0.85rem;font-weight:bold;color:#fff;text-align:center;line-height:1.2;"># OF TARGETS</div>
+                        <div class="target-circle" id="target-count-display">1</div>
+                    </div>
+                    <div id="mini-grid"></div>
+                </div>
+                <div style="display:flex;gap:10px;">
+                    <button class="reset-btn" onclick="prevLevel()">Prev</button>
+                    <button class="reset-btn" id="next-btn" onclick="nextLevel()">Next</button>
+                </div>
+            </div>
+
+        </div>
+
+        <div id="status"></div>
+
+        <div class="legend">
+            <div class="legend-item">
+                <div class="key-icon" style="color:var(--laser-piece-color)"><svg viewBox="0 0 100 100" style="fill:currentColor;"><path d="M20,15 L85,50 L20,85 Z"/><line x1="20" y1="15" x2="20" y2="85" stroke="black" stroke-width="8"/></svg></div> Laser
+            </div>
+            <div class="legend-item"><div class="key-icon" style="color:var(--mirror-color)"><div class="bar slash-icon"></div></div> Mirror</div>
+            <div class="legend-item"><div class="key-icon" style="color:var(--splitter-color)"><div class="bar slash-icon"></div></div> Splitter</div>
+            <div class="legend-item"><div class="key-icon" style="color:var(--checkpoint-color)"><div class="bar vert-icon"></div></div> Gate</div>
+            <div class="legend-item">
+                <div class="key-icon" style="color:var(--target-color)">
+                    <svg viewBox="0 0 100 100">
+                        <path d="M0,100 L50,50 L100,100 Z" fill="currentColor"/>
+                        <path d="M0,100 L0,0 L50,50 Z" fill="currentColor" opacity="0.3"/>
+                        <line x1="0" y1="100" x2="50" y2="50" stroke="white" stroke-width="3"/>
+                        <g><circle cx="50" cy="83" r="18" fill="red"/><circle cx="50" cy="83" r="12" fill="white"/><circle cx="50" cy="83" r="6" fill="red"/></g>
+                    </svg>
+                </div> Target
+            </div>
+            <div class="legend-item">
+                <div class="key-icon" style="color:var(--wedge-color)">
+                    <svg viewBox="0 0 100 100" style="width:100%;height:100%;"><path d="M0,0 L0,100 L100,100 Z" fill="currentColor"/></svg>
+                </div> Wedge
+            </div>
+        </div>
+        <div id="crocs-tag">Brought to you by CROCS</div>
+    </main>
+
+    <script>
+        const GRID_SIZE = 5;
+        let CELL_SIZE = 75;
+        const DIR_MAP = { UP:{x:0,y:-1}, DOWN:{x:0,y:1}, LEFT:{x:-1,y:0}, RIGHT:{x:1,y:0} };
+
+        /* ── RESPONSIVE SCALING ── */
+        function computeCellSize() {
+            const mobile = window.innerWidth <= 900;
+            if (mobile) {
+                // Landscape: grid height limited by vh, width limited by remaining space after two side boxes
+                const miniCellEst = Math.floor(window.innerHeight * 0.11); // rough mini-cell estimate
+                const sideBoxW = miniCellEst * 5 + 34 + 10; // box-width + gap
+                const availW = window.innerWidth - sideBoxW * 2 - 20;
+                const availH = window.innerHeight - 100; // room for title + legend
+                return Math.max(28, Math.floor(Math.min(availW, availH) / 5));
+            }
+            // Desktop
+            const availH = window.innerHeight - 220;
+            const availW = (window.innerWidth - 320) * 0.48;
+            return Math.min(75, Math.floor(Math.min(availH, availW) / 5));
+        }
+
+        function applyScale() {
+            const cs = computeCellSize();
+            CELL_SIZE = cs;
+            const mini = Math.floor(cs * 0.65);
+            document.documentElement.style.setProperty('--cell-size', cs + 'px');
+            document.documentElement.style.setProperty('--mini-cell-size', mini + 'px');
+            document.documentElement.style.setProperty('--box-width', (mini * 5 + 34) + 'px');
+        }
+
+        /* ── LAYOUT: same on mobile and desktop ── */
+        function applyLayout() { /* no restructuring needed — landscape mirrors desktop */ }
+
+        window.addEventListener('resize', () => { applyScale(); applyLayout(); render(); });
+
+        /* ── HAMBURGER ── */
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('open');
+            document.getElementById('overlay').classList.toggle('open');
+        }
+
+        // LEVEL DATABASE
+        const LEVEL_DATA = {};
+        for (let i = 1; i <= 60; i++) {
+            LEVEL_DATA[i] = { targetCount: 1, cardGrid: Array(5).fill().map(() => Array(5).fill('E')), inventory: [] };
+        }
+
+        LEVEL_DATA[1] = { targetCount: 1, cardGrid: [['E','E','E','E','E'],['E','L-D','E','E','E'],['E','E','E','E','E'],['E','E','E','T-TL','E'],['E','E','E','E','E']], inventory: [{ type: 'laser', value: 'DOWN' }, { type: 'target', value: 'TL' }, { type: 'mirror', value: '/' }] };
+        LEVEL_DATA[2] = { targetCount: 1, cardGrid: [['E','E','E','E','T-BL'],['E','E','E','E','E'],['E','E','E','E','E'],['W-TL','E','E','E','E'],['?-L','E','E','E','E']], inventory: [{ type: 'laser', value: 'RIGHT' }, { type: 'target', value: 'TL' }, { type: 'wedge', value: 'TL' }, { type: 'wedge', value: 'TL' }] };
+        LEVEL_DATA[3] = { targetCount: 1, cardGrid: [['E','E','E','E','E'],['E','E','E','E','E'],['E','E','E','E','E'],['?-W','E','E','E','W-TR'],['?-W','?-T','E','E','E']], inventory: [{ type: 'laser', value: 'DOWN' }, { type: 'target', value: 'TL' }, { type: 'wedge', value: 'TR' }, { type: 'wedge', value: 'TR' }, { type: 'wedge', value: 'TR' }] };
+        LEVEL_DATA[4] = { targetCount: 1, cardGrid: [['E','L-D','E','E','E'],['C-H','E','E','E','E'],['E','E','E','E','E'],['E','E','E','E','E'],['?-W','E','E','E','E']], inventory: [{ type: 'laser', value: 'UP' }, { type: 'checkpoint', value: 'V' }, { type: 'target', value: 'TL' }, { type: 'wedge', value: 'TL' }, { type: 'wedge', value: 'TL' }] };
+        LEVEL_DATA[5] = { targetCount: 2, cardGrid: [['E','?-T','E','E','E'],['E','E','E','E','E'],['E','E','E','E','E'],['E','E','E','E','?-T'],['E','B','E','E','E']], inventory: [{ type: 'laser', value: 'RIGHT' }, { type: 'splitter', value: '/' }, { type: 'target', value: 'BR' }, { type: 'target', value: 'BR' }, { type: 'blocker', value: null }, { type: 'wedge', value: 'BL' }] };
+        LEVEL_DATA[6] = { targetCount: 1, cardGrid: [['E','?-T','E','E','E'],['E','E','E','E','E'],['E','E','E','E','E'],['E','E','E','C-V','E'],['E','E','E','E','E']], inventory: [{ type: 'laser', value: 'DOWN' }, { type: 'target', value: 'TL' }, { type: 'mirror', value: '/' }, { type: 'checkpoint', value: 'V' }] };
+        LEVEL_DATA[7] = { targetCount: 1, cardGrid: [['E','T-BL','E','E','E'],['L-R','E','E','E','W-TR'],['E','E','E','E','E'],['E','E','E','E','E'],['E','W-BL','E','E','W-BR']], inventory: [{ type: 'laser', value: 'RIGHT' }, { type: 'target', value: 'TL' }, { type: 'wedge', value: 'TL' }, { type: 'wedge', value: 'TL' }, { type: 'wedge', value: 'TL' }, { type: 'mirror', value: '/' }] };
+        LEVEL_DATA[8] = { targetCount: 1, cardGrid: [['?-T','E','C-V','E','E'],['E','E','E','E','E'],['E','E','E','E','E'],['E','E','E','E','E'],['E','E','?-L','E','B']], inventory: [{ type: 'laser', value: 'DOWN' }, { type: 'target', value: 'TL' }, { type: 'wedge', value: 'TR' }, { type: 'wedge', value: 'TR' }, { type: 'checkpoint', value: 'V' }, { type: 'blocker', value: null }] };
+        LEVEL_DATA[9] = { targetCount: 1, cardGrid: [['?-T','E','E','E','E'],['E','E','E','E','E'],['B','E','?-M','E','E'],['E','E','E','E','E'],['E','E','E','E','?-L']], inventory: [{ type: 'laser', value: 'UP' }, { type: 'target', value: 'TR' }, { type: 'wedge', value: 'TR' }, { type: 'wedge', value: 'TR' }, { type: 'mirror', value: '/' }, { type: 'blocker', value: null }] };
+        LEVEL_DATA[10] = { targetCount: 1, cardGrid: [['E','E','E','E','?-W'],['E','E','E','E','E'],['E','E','E','E','E'],['E','E','E','E','E'],['?-T','?-L','E','E','E']], inventory: [{ type: 'laser', value: 'RIGHT' }, { type: 'target', value: 'TR' }, { type: 'wedge', value: 'TR' }, { type: 'wedge', value: 'TR' }, { type: 'wedge', value: 'TR' }] };
+        LEVEL_DATA[16] = { targetCount: 2, cardGrid: [['E','E','E','E','E'],['E','E','E','E','E'],['E','E','E','?-T','E'],['E','L-D','E','E','E'],['E','E','T-TR','E','E']], inventory: [{ type: 'laser', value: 'RIGHT' }, { type: 'target', value: 'TR' }, { type: 'target', value: 'TR' }, { type: 'wedge', value: 'TR' }, { type: 'wedge', value: 'TR' }, { type: 'wedge', value: 'TR' }, { type: 'splitter', value: '/' }] };
+        LEVEL_DATA[17] = { targetCount: 2, cardGrid: [['?-L','E','E','E','?-T'],['E','E','E','M-\\','E'],['E','E','E','E','E'],['E','E','E','E','E'],['E','E','E','E','E']], inventory: [{ type: 'laser', value: 'RIGHT' }, { type: 'target', value: 'TR' }, { type: 'target', value: 'TR' }, { type: 'mirror', value: '\\' }, { type: 'splitter', value: '/' }] };
+        LEVEL_DATA[18] = { targetCount: 1, cardGrid: [['E','E','E','E','E'],['E','E','?-C','E','E'],['E','E','E','E','E'],['E','?-W','E','?-W','E'],['E','?-W','?-T','?-W','E']], inventory: [{ type: 'laser', value: 'RIGHT' }, { type: 'target', value: 'TR' }, { type: 'wedge', value: 'TR' }, { type: 'wedge', value: 'TR' }, { type: 'wedge', value: 'TR' }, { type: 'wedge', value: 'TR' }, { type: 'checkpoint', value: 'H' }] };
+        LEVEL_DATA[19] = { targetCount: 2, cardGrid: [['E','E','E','?-T','E'],['E','?-L','E','E','E'],['E','E','E','E','E'],['E','E','E','T-BR','E'],['E','E','E','E','E']], inventory: [{ type: 'laser', value: 'RIGHT' }, { type: 'target', value: 'TR' }, { type: 'target', value: 'TR' }, { type: 'wedge', value: 'TR' }, { type: 'wedge', value: 'TR' }, { type: 'splitter', value: '\\' }] };
+        LEVEL_DATA[20] = { targetCount: 3, cardGrid: [['E','E','E','?-T','E'],['T-BR','E','E','E','B'],['E','?-C','E','E','?-T'],['E','E','E','E','E'],['E','E','E','E','E']], inventory: [{ type: 'laser', value: 'RIGHT' }, { type: 'target', value: 'TR' }, { type: 'target', value: 'TR' }, { type: 'target', value: 'TR' }, { type: 'splitter', value: '/' }, { type: 'splitter', value: '/' }, { type: 'checkpoint', value: 'H' }, { type: 'blocker', value: null }] };
+
+        const completedLevels = new Set();
+        let state = {
+            grid: Array(5).fill().map(() => Array(5).fill().map(() => ({ type: 'empty', value: null, isHit: false, isUtilized: false }))),
+            inventory: [], currentLevel: 1, draggedSource: null
+        };
+
+        function createSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const diffs = [{n:'Beginner',s:1,c:'var(--beginner-color)',cl:'beginner-btn'},{n:'Intermediate',s:16,c:'var(--intermediate-color)',cl:'intermediate-btn'},{n:'Advanced',s:31,c:'var(--advanced-color)',cl:'advanced-btn'},{n:'Expert',s:46,c:'var(--expert-color)',cl:'expert-btn'}];
+            diffs.forEach(d => {
+                const sec = document.createElement('div'); sec.className = 'level-section'; sec.style.borderColor = d.c;
+                sec.innerHTML = `<div class="section-title" style="color:${d.c}">${d.n}</div>`;
+                const g = document.createElement('div'); g.className = 'level-grid';
+                for (let i = 0; i < 15; i++) {
+                    const b = document.createElement('div'); const num = d.s + i;
+                    b.className = `level-btn ${d.cl}`; b.innerText = num; b.id = `btn-${num}`;
+                    b.style.backgroundColor = d.c;
+                    b.onclick = () => { selectLevel(num, d.c); if (window.innerWidth <= 900) toggleSidebar(); };
+                    g.appendChild(b);
+                }
+                sec.appendChild(g); sidebar.appendChild(sec);
+            });
+        }
+
+        function selectLevel(num, color) {
+            state.currentLevel = num;
+            document.querySelectorAll('.level-btn').forEach(b => b.classList.remove('active'));
+            if (document.getElementById(`btn-${num}`)) document.getElementById(`btn-${num}`).classList.add('active');
+            if (!color) {
+                if (num >= 46) color = 'var(--expert-color)';
+                else if (num >= 31) color = 'var(--advanced-color)';
+                else if (num >= 16) color = 'var(--intermediate-color)';
+                else color = 'var(--beginner-color)';
+            }
+            document.getElementById('card-header').innerText = `LEVEL ${num}`;
+            document.getElementById('card-header').style.color = color;
+            document.getElementById('level-card').style.borderColor = color;
+            document.getElementById('target-count-display').innerText = LEVEL_DATA[num].targetCount;
+            resetBoard(); renderMiniGrid(num);
+        }
+
+        function prevLevel() { if (state.currentLevel > 1) selectLevel(state.currentLevel - 1); }
+        function nextLevel() { if (state.currentLevel < 60) selectLevel(state.currentLevel + 1); }
+
+        function renderMiniGrid(num) {
+            const container = document.getElementById('mini-grid'); container.innerHTML = '';
+            const data = LEVEL_DATA[num].cardGrid;
+            for (let y = 0; y < 5; y++) for (let x = 0; x < 5; x++) {
+                const div = document.createElement('div'); div.className = 'mini-cell';
+                if (data[y][x] !== 'E') div.appendChild(createPieceDOM(parseShorthand(data[y][x]), 'card'));
+                container.appendChild(div);
+            }
+        }
+
+        function parseShorthand(code) {
+            if (code === 'E') return { type: 'empty', value: null };
+            if (code.startsWith('?-')) { const tMap = {'L':'laser','C':'checkpoint','S':'splitter','M':'mirror','T':'target','W':'wedge'}; return { type: tMap[code[2]], value: 'mystery' }; }
+            if (code.startsWith('L-')) return { type: 'laser', value: {'R':'RIGHT','L':'LEFT','U':'UP','D':'DOWN'}[code[2]] };
+            if (code.startsWith('M-')) return { type: 'mirror', value: code[2] };
+            if (code.startsWith('S-')) return { type: 'splitter', value: code[2] };
+            if (code.startsWith('C-')) return { type: 'checkpoint', value: code[2] };
+            if (code.startsWith('T-')) return { type: 'target', value: code.split('-')[1] };
+            if (code.startsWith('W-')) return { type: 'wedge', value: code.split('-')[1] };
+            if (code === 'B') return { type: 'blocker', value: null };
+            return { type: 'empty', value: null };
+        }
+
+        function resetBoard() {
+            state.grid = Array(5).fill().map(() => Array(5).fill().map(() => ({ type: 'empty', value: null, isHit: false, isUtilized: false })));
+            state.inventory = JSON.parse(JSON.stringify(LEVEL_DATA[state.currentLevel].inventory));
+            render();
+        }
+
+        function initGame() {
+            applyScale();
+            createSidebar();
+            const gridEl = document.getElementById('grid');
+            for (let y = 0; y < GRID_SIZE; y++) for (let x = 0; x < GRID_SIZE; x++) {
+                const div = document.createElement('div'); div.className = 'cell'; div.dataset.x = x; div.dataset.y = y;
+                div.addEventListener('dragover', e => { e.preventDefault(); e.currentTarget.classList.add('drag-over'); });
+                div.addEventListener('dragleave', e => e.currentTarget.classList.remove('drag-over'));
+                div.addEventListener('drop', handleDropGrid);
+                div.addEventListener('click', () => { if (touchDragActive) return; handleRotatePiece({x,y}, false); });
+                gridEl.appendChild(div);
+            }
+            document.getElementById('pieces-box').addEventListener('dragover', e => e.preventDefault());
+            document.getElementById('pieces-box').addEventListener('drop', handleDropInventory);
+            applyLayout();
+            selectLevel(1, 'var(--beginner-color)');
+        }
+
+        function render() {
+            document.querySelectorAll('.cell').forEach(el => {
+                const x = el.dataset.x, y = el.dataset.y, cell = state.grid[y][x];
+                el.innerHTML = ''; if (cell.type !== 'empty') el.appendChild(createPieceDOM(cell, 'grid', x, y));
+            });
+            const invGrid = document.getElementById('inventory-grid'); invGrid.innerHTML = '';
+            state.inventory.forEach((item, i) => {
+                const wrap = document.createElement('div'); wrap.className = 'inv-item-wrap';
+                wrap.onclick = () => { if (touchDragActive) return; handleRotatePiece(i, true); };
+                wrap.appendChild(createPieceDOM(item, 'inv', null, null, i)); invGrid.appendChild(wrap);
+            });
+            updateLaser();
+        }
+
+        function createPieceDOM(data, source, x, y, index) {
+            const cont = document.createElement('div'); cont.className = 'piece-container';
+            const scaleFactor = (source === 'card') ? 0.7 : 0.9;
+            if (source === 'card' && data.value === 'mystery') {
+                const colorMap = {'laser':'var(--laser-piece-color)','checkpoint':'var(--checkpoint-color)','splitter':'var(--splitter-color)','mirror':'var(--mirror-color)','target':'var(--target-color)','wedge':'var(--wedge-color)'};
+                cont.innerHTML = `<div class="mystery-box" style="background:${colorMap[data.type]};transform:scale(${scaleFactor})">?</div>`;
+                return cont;
+            }
+            if (source !== 'card') {
+                const sourceInfo = { source, x: parseInt(x), y: parseInt(y), index };
+                cont.draggable = true;
+                cont.ondragstart = () => { state.draggedSource = sourceInfo; };
+                cont.ondragend = e => { e.target.style.opacity = '1'; };
+                initTouchDrag(cont, sourceInfo);
+            }
+            if (data.type === 'laser') {
+                cont.innerHTML = `<svg viewBox="0 0 100 100" class="laser-svg-icon"><path d="M20,15 L85,50 L20,85 Z" fill="currentColor"/><line x1="20" y1="15" x2="20" y2="85" stroke="black" stroke-width="8"/></svg>`;
+                cont.style.transform = `rotate(${getRot(data.value)}deg) scale(${scaleFactor})`;
+            } else if (data.type === 'mirror' || data.type === 'splitter' || data.type === 'checkpoint') {
+                if (data.type === 'mirror') cont.style.color = 'var(--mirror-color)';
+                else if (data.type === 'splitter') cont.style.color = 'var(--splitter-color)';
+                else cont.style.color = 'var(--checkpoint-color)';
+                let angle = (data.type === 'checkpoint') ? (data.value === 'V' ? 0 : 90) : (data.value === '/' ? 45 : -45);
+                cont.innerHTML = `<div class="bar" style="transform:rotate(${angle}deg) scale(${scaleFactor})"></div>`;
+            } else if (data.type === 'target' || data.type === 'wedge') {
+                cont.classList.add(data.type === 'target' ? 'target-tri' : 'wedge-tri');
+                if (source === 'card') { cont.style.width = '55%'; cont.style.height = '55%'; }
+                cont.innerHTML = getTriangleSVG(data.value, data.type === 'target');
+            } else if (data.type === 'blocker') {
+                cont.innerHTML = `<div style="background:var(--blocker-color);width:70%;height:70%;border-radius:8px;border:2px solid #444;transform:scale(${scaleFactor})"></div>`;
+            }
+            return cont;
+        }
+
+        function getTriangleSVG(corner, isTarget) {
+            const ctrs = {'BL':{cx:50,cy:83},'TL':{cx:17,cy:50},'TR':{cx:50,cy:17},'BR':{cx:83,cy:50}};
+            const p = {
+                'BL':{shaded:'M0,100 L50,50 L100,100 Z',unshaded:'M0,100 L0,0 L50,50 Z',x1:0,y1:100},
+                'TL':{shaded:'M0,0 L50,50 L0,100 Z',unshaded:'M0,0 L100,0 L50,50 Z',x1:0,y1:0},
+                'TR':{shaded:'M100,0 L50,50 L0,0 Z',unshaded:'M100,0 L100,100 L50,50 Z',x1:100,y1:0},
+                'BR':{shaded:'M100,100 L50,50 L100,0 Z',unshaded:'M100,100 L0,100 L50,50 Z',x1:100,y1:100}
+            }[corner];
+            const c = ctrs[corner];
+            if (isTarget) {
+                const bullseye = `<g><circle cx="${c.cx}" cy="${c.cy}" r="18" fill="red"/><circle cx="${c.cx}" cy="${c.cy}" r="12" fill="white"/><circle cx="${c.cx}" cy="${c.cy}" r="6" fill="red"/></g>`;
+                return `<svg viewBox="0 0 100 100"><path d="${p.shaded}" fill="currentColor" opacity="1"/><path d="${p.unshaded}" fill="currentColor" opacity="0.3"/><line x1="${p.x1}" y1="${p.y1}" x2="50" y2="50" stroke="white" stroke-width="3"/>${bullseye}</svg>`;
+            } else {
+                const wPaths = {'BL':'M0,0 L0,100 L100,100 Z','TL':'M0,0 L100,0 L0,100 Z','TR':'M0,0 L100,0 L100,100 Z','BR':'M100,0 L0,100 L100,100 Z'};
+                return `<svg viewBox="0 0 100 100"><path d="${wPaths[corner]}" fill="currentColor"/></svg>`;
+            }
+        }
+
+        function handleRotatePiece(ref, inInv) {
+            let c = inInv ? state.inventory[ref] : state.grid[ref.y][ref.x];
+            if (!c || c.type === 'empty') return;
+            if (c.type === 'mirror' || c.type === 'splitter') c.value = (c.value === '/') ? '\\' : '/';
+            else if (c.type === 'checkpoint') c.value = (c.value === 'V') ? 'H' : 'V';
+            else if (c.type === 'target' || c.type === 'wedge') { const cyc=['BL','TL','TR','BR']; c.value=cyc[(cyc.indexOf(c.value)+1)%4]; }
+            else if (c.type === 'laser') { const ds=['RIGHT','DOWN','LEFT','UP']; c.value=ds[(ds.indexOf(c.value)+1)%4]; }
+            render();
+        }
+
+        function handleDropGrid(e) {
+            e.preventDefault(); e.currentTarget.classList.remove('drag-over');
+            const tX = parseInt(e.currentTarget.dataset.x), tY = parseInt(e.currentTarget.dataset.y), ds = state.draggedSource;
+            if (!ds) return;
+            let incoming = (ds.source === 'inv') ? state.inventory.splice(ds.index, 1)[0] : state.grid[ds.y][ds.x];
+            if (ds.source === 'grid') state.grid[ds.y][ds.x] = { type: 'empty', value: null, isHit: false, isUtilized: false };
+            const target = state.grid[tY][tX];
+            if (target.type !== 'empty') { if (ds.source === 'inv') state.inventory.push(target); else state.grid[ds.y][ds.x] = target; }
+            state.grid[tY][tX] = incoming; state.draggedSource = null; render();
+        }
+
+        function handleDropInventory(e) {
+            e.preventDefault(); const ds = state.draggedSource;
+            if (ds && ds.source === 'grid') {
+                state.inventory.push(state.grid[ds.y][ds.x]);
+                state.grid[ds.y][ds.x] = { type: 'empty', value: null, isHit: false, isUtilized: false };
+                state.draggedSource = null; render();
+            }
+        }
+
+        /* ── TOUCH DRAG & DROP ── */
+        let touchGhost = null;
+        let touchLastCell = null;
+        let touchDragActive = false;
+        let touchStartX = 0, touchStartY = 0;
+        const DRAG_THRESHOLD = 8;
+
+        function initTouchDrag(cont, sourceInfo) {
+            cont.addEventListener('touchstart', e => {
+                const t = e.touches[0];
+                touchStartX = t.clientX;
+                touchStartY = t.clientY;
+                touchDragActive = false;
+                cont._pendingSource = sourceInfo;
+            }, { passive: true });
+
+            cont.addEventListener('touchmove', e => {
+                const t = e.touches[0];
+                const dx = t.clientX - touchStartX;
+                const dy = t.clientY - touchStartY;
+
+                if (!touchDragActive) {
+                    if (Math.sqrt(dx*dx + dy*dy) < DRAG_THRESHOLD) return;
+                    touchDragActive = true;
+                    state.draggedSource = cont._pendingSource;
+
+                    touchGhost = cont.cloneNode(true);
+                    const size = CELL_SIZE * 0.85;
+                    Object.assign(touchGhost.style, {
+                        position: 'fixed', width: size+'px', height: size+'px',
+                        pointerEvents: 'none', zIndex: 9999, opacity: '0.85',
+                        transform: 'translate(-50%,-50%)', transition: 'none',
+                        borderRadius: '8px', background: 'rgba(255,255,255,0.08)'
+                    });
+                    document.body.appendChild(touchGhost);
+                    cont.style.opacity = '0.3';
+                }
+
+                e.preventDefault();
+                touchGhost.style.left = t.clientX + 'px';
+                touchGhost.style.top  = t.clientY + 'px';
+
+                touchGhost.style.display = 'none';
+                const el = document.elementFromPoint(t.clientX, t.clientY);
+                touchGhost.style.display = '';
+
+                const cell = el ? el.closest('.cell') : null;
+                if (touchLastCell && touchLastCell !== cell) touchLastCell.classList.remove('drag-over');
+                if (cell) cell.classList.add('drag-over');
+                touchLastCell = cell;
+            }, { passive: false });
+
+            cont.addEventListener('touchend', e => {
+                cont.style.opacity = '1';
+
+                if (!touchDragActive) {
+                    cont._pendingSource = null;
+                    return;
+                }
+                touchDragActive = false;
+
+                if (touchGhost) { touchGhost.remove(); touchGhost = null; }
+                if (touchLastCell) touchLastCell.classList.remove('drag-over');
+
+                const t = e.changedTouches[0];
+                const el = document.elementFromPoint(t.clientX, t.clientY);
+                const cell = el ? el.closest('.cell') : null;
+                const piecesBox = el ? el.closest('#pieces-box') : null;
+
+                if (cell) {
+                    const tX = parseInt(cell.dataset.x), tY = parseInt(cell.dataset.y);
+                    const ds = state.draggedSource;
+                    if (ds) {
+                        let incoming = (ds.source === 'inv') ? state.inventory.splice(ds.index, 1)[0] : state.grid[ds.y][ds.x];
+                        if (ds.source === 'grid') state.grid[ds.y][ds.x] = { type:'empty', value:null, isHit:false, isUtilized:false };
+                        const target = state.grid[tY][tX];
+                        if (target.type !== 'empty') { if (ds.source==='inv') state.inventory.push(target); else state.grid[ds.y][ds.x] = target; }
+                        state.grid[tY][tX] = incoming;
+                    }
+                } else if (piecesBox) {
+                    const ds = state.draggedSource;
+                    if (ds && ds.source === 'grid') {
+                        state.inventory.push(state.grid[ds.y][ds.x]);
+                        state.grid[ds.y][ds.x] = { type:'empty', value:null, isHit:false, isUtilized:false };
+                    }
+                }
+
+                state.draggedSource = null;
+                touchLastCell = null;
+                render();
+            }, { passive: true });
+        }
+
+        function updateLaser() {
+            for (let y=0;y<5;y++) for (let x=0;x<5;x++) { state.grid[y][x].isHit=false; state.grid[y][x].isUtilized=false; }
+            let laserSource = null;
+            for (let y=0;y<5;y++) for (let x=0;x<5;x++) if (state.grid[y][x].type==='laser') { laserSource={x,y,v:state.grid[y][x].value}; state.grid[y][x].isUtilized=true; }
+            const svg = document.getElementById('laser-svg'); svg.innerHTML = '';
+            if (laserSource) traceBeam(laserSource.x, laserSource.y, laserSource.v, 0, svg);
+            document.querySelectorAll('.cell').forEach(el => {
+                const cell = state.grid[el.dataset.y][el.dataset.x];
+                if (cell.type==='target') el.querySelector('.target-tri').classList.toggle('hit-anim', cell.isHit);
+            });
+            checkWin();
+        }
+
+        function checkWin() {
+            const requiredHits = LEVEL_DATA[state.currentLevel].targetCount;
+            let targetHits = 0, allUsed = true;
+            for (let y=0;y<5;y++) for (let x=0;x<5;x++) {
+                const c = state.grid[y][x];
+                if (c.type==='target' && c.isHit) targetHits++;
+                if ((c.type==='mirror'||c.type==='splitter'||c.type==='checkpoint'||c.type==='target'||c.type==='wedge') && !c.isUtilized) allUsed=false;
+            }
+            const inventoryEmpty = (state.inventory.length === 0);
+            let cardMatch = true;
+            const cardData = LEVEL_DATA[state.currentLevel].cardGrid;
+            for (let y=0;y<5;y++) for (let x=0;x<5;x++) {
+                const reqStr = cardData[y][x];
+                if (reqStr==='E'||reqStr==='B') continue;
+                const act = state.grid[y][x];
+                if (reqStr.startsWith('?-')) { if (act.type!={'L':'laser','C':'checkpoint','S':'splitter','M':'mirror','T':'target','W':'wedge'}[reqStr[2]]) cardMatch=false; }
+                else { const reqObj=parseShorthand(reqStr); if (act.type!==reqObj.type||act.value!==reqObj.value) cardMatch=false; }
+            }
+            const won = (targetHits >= requiredHits && allUsed && cardMatch && inventoryEmpty);
+            document.getElementById('status').innerText = won ? "MISSION COMPLETE" : "";
+            document.getElementById('game-container').classList.toggle('win-border', won);
+            document.getElementById('next-btn').classList.toggle('next-glow', won);
+            if (won) {
+                completedLevels.add(state.currentLevel);
+                const btn = document.getElementById(`btn-${state.currentLevel}`);
+                if (btn) btn.classList.add('completed');
+            }
+        }
+
+        function traceBeam(x, y, dir, depth, svg, isSplit=false) {
+            if (depth > 40) return;
+            let curX=x, curY=y, curDir=dir;
+            const off = {RIGHT:0.4,LEFT:-0.4,UP:-0.4,DOWN:0.4};
+            let sX=x*CELL_SIZE+CELL_SIZE/2, sY=y*CELL_SIZE+CELL_SIZE/2;
+            if (depth===0 && !isSplit) { if(dir==='RIGHT'||dir==='LEFT') sX+=off[dir]*CELL_SIZE; else sY+=off[dir]*CELL_SIZE; }
+            const pts = [{x:sX,y:sY}];
+            for (let i=0;i<40;i++) {
+                const step=DIR_MAP[curDir], nX=curX+step.x, nY=curY+step.y;
+                if (nX<0||nX>=5||nY<0||nY>=5) { pts.push({x:(curX+step.x*0.5+0.5)*CELL_SIZE,y:(curY+step.y*0.5+0.5)*CELL_SIZE}); break; }
+                curX=nX; curY=nY;
+                const cell=state.grid[curY][curX], cx=curX*CELL_SIZE+CELL_SIZE/2, cy=curY*CELL_SIZE+CELL_SIZE/2;
+                if (cell.type==='laser'&&i>0) { pts.push({x:cx,y:cy}); break; }
+                if (cell.type==='checkpoint') {
+                    if ((curDir==='UP'||curDir==='DOWN')!==(cell.value==='V')) { cell.isHit=true; cell.isUtilized=true; }
+                    else { pts.push({x:(curX+DIR_MAP[curDir].x*-0.5+0.5)*CELL_SIZE,y:(curY+DIR_MAP[curDir].y*-0.5+0.5)*CELL_SIZE}); break; }
+                }
+                if (cell.type==='target'||cell.type==='wedge') {
+                    const physics=getTargetPhysics(cell.value,{UP:'BOTTOM',DOWN:'TOP',LEFT:'RIGHT',RIGHT:'LEFT'}[curDir]);
+                    if (physics.action==='REFLECT') { cell.isUtilized=true; pts.push({x:cx,y:cy}); curDir=physics.next; }
+                    else { pts.push({x:(curX+DIR_MAP[curDir].x*-0.3+0.5)*CELL_SIZE,y:(curY+DIR_MAP[curDir].y*-0.3+0.5)*CELL_SIZE}); cell.isUtilized=true; if(cell.type==='target'&&physics.action==='WIN') cell.isHit=true; break; }
+                } else if (cell.type==='mirror'||cell.type==='splitter') {
+                    cell.isUtilized=true; pts.push({x:cx,y:cy});
+                    const mDir=(cell.value==='/')?{UP:'RIGHT',RIGHT:'UP',DOWN:'LEFT',LEFT:'DOWN'}[curDir]:{UP:'LEFT',LEFT:'UP',DOWN:'RIGHT',RIGHT:'DOWN'}[curDir];
+                    if (cell.type==='splitter') traceBeam(curX,curY,mDir,depth+1,svg,true); else curDir=mDir;
+                } else if (cell.type==='blocker') { pts.push({x:cx,y:cy}); break; }
+            }
+            if (pts.length>1) {
+                const poly=document.createElementNS("http://www.w3.org/2000/svg","polyline");
+                poly.setAttribute("points",pts.map(p=>`${p.x},${p.y}`).join(' '));
+                poly.setAttribute("class","laser-segment"); svg.appendChild(poly);
+            }
+        }
+
+        function getTargetPhysics(orientation, entryFace) {
+            return {'TL':{LEFT:{action:'WIN'},BOTTOM:{action:'REFLECT',next:'RIGHT'},RIGHT:{action:'REFLECT',next:'DOWN'},TOP:{action:'BLOCK'}},'TR':{TOP:{action:'WIN'},BOTTOM:{action:'REFLECT',next:'LEFT'},LEFT:{action:'REFLECT',next:'DOWN'},RIGHT:{action:'BLOCK'}},'BL':{BOTTOM:{action:'WIN'},TOP:{action:'REFLECT',next:'RIGHT'},RIGHT:{action:'REFLECT',next:'UP'},LEFT:{action:'BLOCK'}},'BR':{RIGHT:{action:'WIN'},TOP:{action:'REFLECT',next:'LEFT'},LEFT:{action:'REFLECT',next:'UP'},BOTTOM:{action:'BLOCK'}}}[orientation][entryFace];
+        }
+
+        function getRot(d) { return {RIGHT:0,DOWN:90,LEFT:180,UP:270}[d]; }
+        initGame();
+    </script>
+</body>
+</html>
